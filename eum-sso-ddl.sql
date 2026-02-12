@@ -12,23 +12,42 @@ $$ language 'plpgsql';
 
 -- 3. 사용자 및 권한 관리 (RBAC) 테이블
 -- username, email의 UNIQUE 제약조건은 제거하고, 수기 입력 식별자인 user_id를 PK처럼 활용
-CREATE TABLE IF NOT EXISTS users (
-                                     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), -- 시스템 내부 관리용 PK
-    user_id VARCHAR(100) NOT NULL UNIQUE,          -- 사용자가 수기 입력하는 고유 ID (SSO 인증 주체)
-    username VARCHAR(50) NOT NULL,                 -- 중복 허용
-    password VARCHAR(255) NOT NULL,                -- 암호화된 비밀번호
-    email VARCHAR(100) NOT NULL,                   -- 중복 허용
-    enabled BOOLEAN DEFAULT TRUE NOT NULL,
-    account_non_locked BOOLEAN DEFAULT TRUE NOT NULL,
-    account_non_expired BOOLEAN DEFAULT TRUE NOT NULL,
-    credentials_non_expired BOOLEAN DEFAULT TRUE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
-    );
+create table users
+(
+    id                      uuid                     default uuid_generate_v4()         not null
+        primary key,
+    user_id                 varchar(100)                                                not null
+        unique,
+    username                varchar(50)                                                 not null,
+    password                varchar(255)                                                not null,
+    email                   varchar(100)                                                not null,
+    enabled                 boolean                  default true                       not null,
+    account_non_locked      boolean                  default true                       not null,
+    account_non_expired     boolean                  default true                       not null,
+    credentials_non_expired boolean                  default true                       not null,
+    created_at              timestamp with time zone default CURRENT_TIMESTAMP          not null,
+    updated_at              timestamp with time zone default CURRENT_TIMESTAMP          not null,
+    org_id                  uuid
+        constraint fk_users_org_id
+            references orgs
+            on delete set null,
+    dept_name               varchar(100),
+    phone_number            varchar(20),
+    user_role               varchar(20)              default 'STAFF'::character varying not null,
+    deleted                 boolean                  default false                      not null,
+    last_login_at           timestamp with time zone
+);
 
-COMMENT ON TABLE users IS '서비스 사용자 정보 (user_id를 통해 인증 시스템과 연동)';
-COMMENT ON COLUMN users.id IS '시스템 내부 관리용 UUID';
-COMMENT ON COLUMN users.user_id IS '비즈니스 식별자 및 로그인 시 principal로 사용되는 고유 ID';
+comment on table users is '서비스 사용자 정보 (user_id를 통해 인증 시스템과 연동)';
+
+comment on column users.id is '시스템 내부 관리용 UUID';
+
+comment on column users.user_id is '비즈니스 식별자 및 로그인 시 principal로 사용되는 고유 ID';
+
+comment on column users.org_id is '소속 조직 ID';
+
+comment on column users.user_role is '권한(ADMIN, STAFF)';
+
 
 CREATE TABLE IF NOT EXISTS roles (
                                      id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -131,3 +150,113 @@ CREATE TRIGGER update_client_details_modtime BEFORE UPDATE ON client_details_inf
 
 -- 7. 초기 데이터 (역할)
 INSERT INTO roles (name) VALUES ('ROLE_USER'), ('ROLE_ADMIN') ON CONFLICT DO NOTHING;
+
+
+-- 조직(제약사, 위탁사) 테이블
+CREATE TABLE orgs (
+                      id          uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                      org_type    varchar(20)              NOT NULL, -- PHARMA, CSO
+                      biz_name    varchar(100)             NOT NULL,
+                      biz_number  varchar(20)              NOT NULL UNIQUE,
+                      rep_name    varchar(50),
+                      address     varchar(255),
+                      biz_doc_url varchar(500),
+                      status      varchar(20)              DEFAULT 'NORMAL' NOT NULL, -- NORMAL, CLOSED, SUSPENDED
+                      deleted     boolean                  DEFAULT false NOT NULL,
+                      modified_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                      created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 파일 관리 테이블
+CREATE TABLE s3files (
+                         id          uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                         url         varchar(500)             NOT NULL,
+                         file_size   bigint,
+                         orphaned    boolean                  DEFAULT false,
+                         deleted     boolean                  DEFAULT false,
+                         uploaded_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                         modified_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                         created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 주석 추가 (PostgreSQL 스타일)
+COMMENT ON COLUMN users.org_id IS '소속 조직 ID';
+COMMENT ON COLUMN users.user_role IS '권한(ADMIN, STAFF)';
+
+
+-- 거래처 마스터 (임시/정식 통합)
+CREATE TABLE cso_partners (
+                              id          uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                              org_id      uuid                     NULL,
+                              biz_name    varchar(100)             NOT NULL,
+                              biz_number  varchar(20)              NOT NULL UNIQUE,
+                              rep_name    varchar(50),
+                              address     varchar(255),
+                              deleted     boolean                  DEFAULT false,
+                              modified_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                              created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                              CONSTRAINT fk_partners_org_id FOREIGN KEY (org_id) REFERENCES orgs(id)
+);
+
+-- 재위탁 보고서 메인
+CREATE TABLE cso_re_entrustment_reports (
+                                            id               uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                            pharma_org_id    uuid                     NOT NULL,
+                                            cso_org_id       uuid                     NOT NULL,
+                                            target_partner_id uuid                    NOT NULL,
+                                            approval_status  varchar(20)              DEFAULT 'READY', -- READY, APPROVED, REJECTED
+                                            delivery_status  varchar(20)              DEFAULT 'PROGRESS', -- DELIVERED, PROGRESS, FAILED
+                                            contract_start_date date,
+                                            contract_end_date   date,
+                                            notice_date         date,
+                                            report_date         timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                            report_user_id      uuid                    NOT NULL,
+                                            deleted             boolean                  DEFAULT false,
+                                            modified_at         timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                            created_at          timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                            CONSTRAINT fk_report_pharma FOREIGN KEY (pharma_org_id) REFERENCES orgs(id),
+                                            CONSTRAINT fk_report_cso FOREIGN KEY (cso_org_id) REFERENCES orgs(id),
+                                            CONSTRAINT fk_report_target FOREIGN KEY (target_partner_id) REFERENCES cso_partners(id),
+                                            CONSTRAINT fk_report_user FOREIGN KEY (report_user_id) REFERENCES users(id)
+);
+
+-- 보고 증빙 서류
+CREATE TABLE cso_report_documents (
+                                      id                       uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                      re_entrustment_report_id uuid                     NOT NULL,
+                                      doc_type                 varchar(30)              NOT NULL, -- BIZ_REG, CONTRACT, NOTICE, EDU
+                                      s3file_id                uuid                     NOT NULL,
+                                      deleted                  boolean                  DEFAULT false,
+                                      modified_at              timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                      created_at               timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                      CONSTRAINT fk_doc_report_id FOREIGN KEY (re_entrustment_report_id) REFERENCES cso_re_entrustment_reports(id),
+                                      CONSTRAINT fk_doc_s3file_id FOREIGN KEY (s3file_id) REFERENCES s3files(id)
+);
+
+-- 승인/반려 로그
+CREATE TABLE cso_report_approval_logs (
+                                          id          uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                                          report_id   uuid                     NOT NULL,
+                                          act_user_id uuid                     NOT NULL,
+                                          action_type varchar(20)              NOT NULL, -- SUBMIT, REJECT, RESUBMIT, APPROVE
+                                          comment     text,
+                                          deleted     boolean                  DEFAULT false,
+                                          modified_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                          created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                                          CONSTRAINT fk_log_report_id FOREIGN KEY (report_id) REFERENCES cso_re_entrustment_reports(id),
+                                          CONSTRAINT fk_log_user_id FOREIGN KEY (act_user_id) REFERENCES users(id)
+);
+
+
+-- 게시판 (공지사항 등)
+CREATE TABLE boards (
+                        id          uuid                     DEFAULT uuid_generate_v4() PRIMARY KEY,
+                        category    varchar(20)              NOT NULL, -- NOTICE, LAW, FAQ
+                        title       varchar(200)             NOT NULL,
+                        content     text                     NOT NULL,
+                        is_fixed    boolean                  DEFAULT false,
+                        deleted     boolean                  DEFAULT false,
+                        modified_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+                        created_at  timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+

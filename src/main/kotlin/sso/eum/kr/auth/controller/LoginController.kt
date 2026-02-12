@@ -1,34 +1,40 @@
 package sso.eum.kr.auth.controller
 
-import jakarta.servlet.http.HttpSession
+import org.springframework.security.core.Authentication
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
+import sso.eum.kr.auth.service.OrgService
+import sso.eum.kr.auth.service.RoleService
 import sso.eum.kr.auth.service.dto.UserRegistrationRequest
 
 @Controller
-class LoginController {
+class LoginController(
+    private val orgService: OrgService,
+    private val roleService: RoleService
+) {
 
     @GetMapping("/login")
-    fun login(session: HttpSession, model: Model): String {
-        val userId = session.getAttribute("loginUserId")
-        val userRoles = session.getAttribute("loginUserRoles")
-
-        if (userId != null && userRoles != null) {
-            model.addAttribute("loginUserId", userId)
-            model.addAttribute("loginUserRoles", userRoles)
-
-            // 모델에 추가한 후 세션에서 제거
-            session.removeAttribute("loginUserId")
-            session.removeAttribute("loginUserRoles")
+    fun login(authentication: Authentication?): String {
+        if (authentication != null && authentication.isAuthenticated) {
+            if (authentication.authorities.any { it.authority != "ROLE_ANONYMOUS" }) {
+                return "redirect:/"
+            }
         }
-
         return "login"
     }
 
     @GetMapping("/register")
-    fun showRegistrationForm(model: Model): String {
-        model.addAttribute("userRegistrationRequest", UserRegistrationRequest("", "", "", ""))
+    fun showRegistrationForm(model: Model, authentication: Authentication?): String {
+        if (authentication != null && authentication.isAuthenticated) {
+            if (authentication.authorities.any { it.authority != "ROLE_ANONYMOUS" }) {
+                return "redirect:/"
+            }
+        }
+
+        model.addAttribute("userRegistrationRequest", UserRegistrationRequest(userId = "", username = "", email = "", password = ""))
+        model.addAttribute("allOrgs", orgService.findAllOrgs())
+        model.addAttribute("allRoles", roleService.findAllRoles())
         return "register"
     }
 }

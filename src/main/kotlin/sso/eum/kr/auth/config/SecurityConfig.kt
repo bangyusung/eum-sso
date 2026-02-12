@@ -9,6 +9,7 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
+import org.springframework.http.HttpMethod
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.DefaultAuthenticationEventPublisher
 import org.springframework.security.authentication.ProviderManager
@@ -31,6 +32,9 @@ import org.springframework.security.oauth2.server.authorization.settings.Authori
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint
+import org.springframework.web.cors.CorsConfiguration
+import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import sso.eum.kr.auth.repository.UserRepository
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -56,6 +60,7 @@ class SecurityConfig(
                     LoginUrlAuthenticationEntryPoint("/login")
                 )
             }
+            .cors { }
             .oauth2ResourceServer { resourceServer ->
                 resourceServer.jwt(org.springframework.security.config.Customizer.withDefaults())
             }
@@ -66,9 +71,14 @@ class SecurityConfig(
     @Order(2)
     fun defaultSecurityFilterChain(http: HttpSecurity, authenticationManager: AuthenticationManager): SecurityFilterChain {
         http
+            .cors { }
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers("/register", "/api/v1/users/register").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/users", "/api/v1/users/**").hasAuthority("ROLE_ADMIN")
+                    .requestMatchers("/api/v1/users/**").hasAuthority("ROLE_ADMIN")
+                    .requestMatchers("/api/v1/roles/**").hasAuthority("ROLE_ADMIN")
+                    .requestMatchers("/api/v1/client-details/**").hasAuthority("ROLE_ADMIN")
                     .requestMatchers("/").authenticated()
                     .anyRequest().authenticated()
             }
@@ -83,7 +93,7 @@ class SecurityConfig(
                   .deleteCookies("JSESSIONID")
             }
             .authenticationManager(authenticationManager)
-            .csrf { it.ignoringRequestMatchers("/register", "/api/v1/users/register") }
+            .csrf { it.ignoringRequestMatchers("/register", "/api/v1/**") }
         return http.build()
     }
 
@@ -108,8 +118,20 @@ class SecurityConfig(
     }
 
     @Bean
+    fun corsConfigurationSource(): CorsConfigurationSource {
+        val configuration = CorsConfiguration()
+        configuration.allowedOrigins = listOf("http://localhost:3000")
+        configuration.allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        configuration.allowedHeaders = listOf("*")
+        configuration.allowCredentials = true
+        val source = UrlBasedCorsConfigurationSource()
+        source.registerCorsConfiguration("/**", configuration)
+        return source
+    }
+
+    @Bean
     fun registeredClientRepository(): RegisteredClientRepository {
-        val registeredClient = RegisteredClient.withId(UUID.randomUUID().toString())
+        val serverSideClient = RegisteredClient.withId(UUID.randomUUID().toString())
             .clientId("messaging-client")
             .clientSecret(passwordEncoder().encode("secret"))
             .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
@@ -124,7 +146,24 @@ class SecurityConfig(
             .scope("message.write")
             .clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
             .build()
-        return InMemoryRegisteredClientRepository(registeredClient)
+
+        val spaClient = RegisteredClient.withId(UUID.randomUUID().toString())
+            .clientId("oidc-client")
+            .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .redirectUri("http://localhost:3000/callback")
+            .postLogoutRedirectUri("http://localhost:3000/logout")
+            .scope(OidcScopes.OPENID)
+            .scope(OidcScopes.PROFILE)
+            .clientSettings(
+                ClientSettings.builder()
+                    .requireProofKey(true)
+                    .requireAuthorizationConsent(false)
+                    .build()
+            )
+            .build()
+
+        return InMemoryRegisteredClientRepository(serverSideClient, spaClient)
     }
 
     @Bean
@@ -147,7 +186,9 @@ class SecurityConfig(
 
     @Bean
     fun authorizationServerSettings(): AuthorizationServerSettings {
-        return AuthorizationServerSettings.builder().build()
+        return AuthorizationServerSettings.builder()
+            .issuer("http://localhost:8080")
+            .build()
     }
 
     private fun generateRsaKey(): KeyPair {

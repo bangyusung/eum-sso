@@ -3,7 +3,7 @@ package sso.eum.kr.auth.domain
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
-import java.time.Instant
+import java.time.ZonedDateTime
 import java.util.UUID
 
 @Entity
@@ -37,13 +37,32 @@ class User(
     @Column(name = "credentials_non_expired", nullable = false)
     var credentialsNonExpired: Boolean = true,
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "org_id")
+    var organization: Org? = null,
+
+    @Column(name = "dept_name", length = 100)
+    var deptName: String? = null,
+
+    @Column(name = "phone_number", length = 20)
+    var phoneNumber: String? = null,
+
+    @Column(name = "user_role", nullable = false, length = 20)
+    var userRole: String = "STAFF",
+
+    @Column(nullable = false)
+    var deleted: Boolean = false,
+
+    @Column(name = "last_login_at")
+    var lastLoginAt: ZonedDateTime? = null,
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    val createdAt: Instant? = null,
+    val createdAt: ZonedDateTime? = null,
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: Instant? = null,
+    var updatedAt: ZonedDateTime? = null,
 
     @ManyToMany(fetch = FetchType.EAGER, cascade = [CascadeType.PERSIST, CascadeType.MERGE])
     @JoinTable(

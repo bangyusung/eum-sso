@@ -4,46 +4,78 @@
     <meta charset="UTF-8">
     <title>Eum-SSO - Register</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f5f5f5; }
-        .container { background-color: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+        body { font-family: sans-serif; background-color: #f5f5f5; padding: 2rem; }
+        .container { background-color: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 600px; margin: auto; }
         h1 { text-align: center; color: #333; }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; margin-bottom: 0.5rem; color: #555; }
-        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 0.8rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 0.9rem; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 1rem; cursor: pointer; }
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group-inline { display: flex; gap: 1rem; align-items: center; }
+        label { display: block; margin-bottom: 0.5rem; color: #555; font-weight: bold; }
+        input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 0.8rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 0.9rem; border: none; border-radius: 4px; background-color: #28a745; color: white; font-size: 1rem; cursor: pointer; margin-top: 1rem; }
         .btn:hover { background-color: #218838; }
         .alert { padding: 1rem; margin-bottom: 1rem; border-radius: 4px; }
         .alert-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .login-link { text-align: center; margin-top: 1rem; }
         .login-link a { color: #007bff; text-decoration: none; }
+        .radio-group label, .checkbox-group label { font-weight: normal; margin-right: 1rem; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>Create Account</h1>
 
-    <!-- 등록 에러 메시지 -->
-    <div th:if="${error}" class="alert alert-danger" th:text="${error}">
-        Error message will be shown here.
-    </div>
+    <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
 
     <form th:action="@{/register}" th:object="${userRegistrationRequest}" method="post">
         <div class="form-group">
             <label for="userId">User ID</label>
-            <input type="text" id="userId" th:field="*{userId}" placeholder="Choose a unique User ID" required autofocus />
+            <input type="text" id="userId" th:field="*{userId}" required autofocus />
         </div>
         <div class="form-group">
             <label for="username">Full Name</label>
-            <input type="text" id="username" th:field="*{username}" placeholder="Enter your full name" required />
+            <input type="text" id="username" th:field="*{username}" required />
         </div>
         <div class="form-group">
             <label for="email">Email</label>
-            <input type="email" id="email" th:field="*{email}" placeholder="Enter your email" required />
+            <input type="email" id="email" th:field="*{email}" required />
         </div>
         <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" id="password" th:field="*{password}" placeholder="Create a password" required />
+            <input type="password" id="password" th:field="*{password}" required />
         </div>
+        <hr style="margin: 2rem 0; border: 1px solid #eee;">
+        <div class="form-group">
+            <label for="orgId">Organization</label>
+            <select id="orgId" th:field="*{orgId}">
+                <option value="">-- Select Organization --</option>
+                <option th:each="org : ${allOrgs}" th:value="${org.id}" th:text="${org.bizName}"></option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="deptName">Department Name</label>
+            <input type="text" id="deptName" th:field="*{deptName}" />
+        </div>
+        <div class="form-group">
+            <label for="phoneNumber">Phone Number</label>
+            <input type="text" id="phoneNumber" th:field="*{phoneNumber}" />
+        </div>
+        <div class="form-group">
+            <label>User Role</label>
+            <div class="radio-group">
+                <label><input type="radio" th:field="*{userRole}" value="STAFF" /> Staff</label>
+                <label><input type="radio" th:field="*{userRole}" value="ADMIN" /> Admin</label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Permissions</label>
+            <div class="checkbox-group">
+                <label th:each="role : ${allRoles}">
+                    <input type="checkbox" th:field="*{roles}" th:value="${role.name}" />
+                    <span th:text="${role.name}"></span>
+                </label>
+            </div>
+        </div>
+
         <button type="submit" class="btn">Register</button>
     </form>
     <div class="login-link">
