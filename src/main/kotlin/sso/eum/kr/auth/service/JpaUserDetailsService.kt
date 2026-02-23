@@ -12,19 +12,19 @@ import org.springframework.security.core.userdetails.User as SpringUser
 class JpaUserDetailsService(private val userRepository: UserRepository) : UserDetailsService {
 
     override fun loadUserByUsername(username: String): UserDetails {
-        val user = userRepository.findByUserId(username)
-            .orElseThrow { UsernameNotFoundException("User not found with user_id: $username") }
+        val user = userRepository.findByAccount(username)
+            .orElseThrow { UsernameNotFoundException("User not found with account: $username") }
 
         val authorities = user.roles.map { SimpleGrantedAuthority(it.name) }
 
         return SpringUser.builder()
-            .username(user.userId)
+            .username(user.account)
             .password(user.password)
             .authorities(authorities)
-            .accountExpired(!user.accountNonExpired)
-            .accountLocked(!user.accountNonLocked)
-            .credentialsExpired(!user.credentialsNonExpired)
-            .disabled(!user.enabled)
+            .accountExpired(false) // `accountExpired` 필드는 현재 User 모델에 없음
+            .accountLocked(user.locked)
+            .credentialsExpired(false) // `credentialsExpired` 필드는 현재 User 모델에 없음
+            .disabled(user.status != "APPROVED") // `status`가 'APPROVED'가 아니면 비활성화
             .build()
     }
 }

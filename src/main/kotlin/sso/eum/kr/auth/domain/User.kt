@@ -1,49 +1,57 @@
 package sso.eum.kr.auth.domain
 
 import jakarta.persistence.*
-import org.hibernate.annotations.CreationTimestamp
-import org.hibernate.annotations.UpdateTimestamp
 import java.time.Instant
-import java.util.UUID
 
 @Entity
 @Table(name = "users")
-class User(
+class User {
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    val id: UUID? = null,
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Int? = null
 
-    @Column(name = "user_id", nullable = false, unique = true, length = 100)
-    var userId: String = "",
+    @Column(nullable = false, unique = true, length = 50)
+    lateinit var account: String
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "org_id", nullable = false)
+    lateinit var org: Org
 
     @Column(nullable = false, length = 50)
-    var username: String = "",
+    lateinit var username: String
 
     @Column(nullable = false, length = 255)
-    var password: String = "",
+    lateinit var password: String
 
     @Column(nullable = false, length = 100)
-    var email: String = "",
+    lateinit var email: String
+
+    @Column(name = "dept_name", length = 100)
+    var deptName: String? = null
+
+    @Column(name = "phone_number", nullable = false, length = 20)
+    lateinit var phoneNumber: String
 
     @Column(nullable = false)
-    var enabled: Boolean = true,
+    var locked: Boolean = false
 
-    @Column(name = "account_non_locked", nullable = false)
-    var accountNonLocked: Boolean = true,
+    @Column(length = 20)
+    var status: String = "PENDING"
 
-    @Column(name = "account_non_expired", nullable = false)
-    var accountNonExpired: Boolean = true,
+    @Column(name = "user_role", nullable = false, length = 20)
+    var userRole: String = "STAFF"
 
-    @Column(name = "credentials_non_expired", nullable = false)
-    var credentialsNonExpired: Boolean = true,
+    @Column(name = "last_login_at")
+    var lastLoginAt: Instant? = null
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    val createdAt: Instant? = null,
+    @Column(nullable = false)
+    var deleted: Boolean = false
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    var updatedAt: Instant? = null,
+    @Column(name = "modified_at", updatable = false, insertable = false)
+    val modifiedAt: Instant? = null
+
+    @Column(name = "created_at", updatable = false, insertable = false)
+    val createdAt: Instant? = null
 
     @ManyToMany(fetch = FetchType.EAGER, cascade = [CascadeType.PERSIST, CascadeType.MERGE])
     @JoinTable(
@@ -52,4 +60,4 @@ class User(
         inverseJoinColumns = [JoinColumn(name = "role_id", referencedColumnName = "id")]
     )
     var roles: MutableSet<Role> = mutableSetOf()
-)
+}

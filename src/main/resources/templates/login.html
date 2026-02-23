@@ -24,9 +24,9 @@
 <div class="login-container">
     <h1>Eum-SSO</h1>
 
-    <!-- 로그인 에러 메시지 -->
-    <div th:if="${param.error}" class="alert alert-danger">
-        사용자 ID 또는 비밀번호가 올바르지 않습니다.
+    <!-- 로그인 에러 메시지 (동적으로 변경) -->
+    <div th:if="${param.error}" class="alert alert-danger" th:text="${param.message}">
+        Login error message will be shown here.
     </div>
 
     <!-- 로그아웃 성공 메시지 -->
